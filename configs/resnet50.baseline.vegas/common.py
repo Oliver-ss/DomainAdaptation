@@ -4,6 +4,10 @@
 	> Mail: yuansongwx@outlook.com
 	> Created Time: Mon 21 Oct 2019 01:46:28 PM EDT
  ************************************************************************'''
+import json
+with open('../../scripts/mean_std.json') as f:
+    mean_std = json.load(f)
+
 class Config:
     #Model
     backbone = 'resnet50' #backbone name ['resnet50', 'xception', 'drn', 'mobilenet', 'resnet101']
@@ -12,7 +16,9 @@ class Config:
     #Data
     all_dataset = ['Shanghai', 'Vegas', 'Paris', 'Khartoum']
     dataset = 'Vegas'
+    source_mean_std = mean_std[dataset]
     target = 'Shanghai'
+    target_mean_std = mean_std[target]
     train_num_workers = 4
     val_num_workers = 2
     img_root = '/usr/xtmp/satellite/spacenet/'
@@ -29,6 +35,7 @@ class Config:
     lr_step = 5
     warmup_epochs = 10
     lambda_adv = 0.001
+
 
 
 config = Config()

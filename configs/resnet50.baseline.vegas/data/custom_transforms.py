@@ -24,11 +24,15 @@ class Normalize(object):
         img /= 255.0
         mask /= 255
         mask.astype(int)
+        img -= self.mean
+        img /= self.std
         sample_new = {'image': img, 'label':mask}
         if self.if_pair:
             img_pair = sample['image_pair']
             img_pair = np.array(img_pair).astype(np.float32)
             img_pair /= 255
+            img_pair -= self.mean
+            img_pair /= self.std
             sample_new['image_pair'] = img_pair
         return sample_new
 

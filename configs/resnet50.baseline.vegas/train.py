@@ -109,7 +109,7 @@ class Trainer(object):
             tbar.set_description('Train loss: %.3f' % (train_loss / (i + 1)))
 
         print('[Epoch: %d, numImages: %5d]' % (epoch, i * self.config.batch_size + A_image.data.shape[0]))
-        print('Seg Loss: %.3f' % seg_loss_sum)
+        print('Seg Loss: %.3f' % train_loss)
 
         if self.visdom:
             self.vis.line(X=torch.tensor([epoch]), Y=torch.tensor([seg_loss_sum]), win='train_loss', name='Seg_loss',
@@ -179,7 +179,6 @@ class Trainer(object):
 
         self.model.eval()
         tbar_source = tqdm(self.val_loader, desc='\r')
-        tbar_target = tqdm(self.target_val_loader, desc='\r')
         s_acc, s_iou, s_miou = get_metrics(tbar_source, True)
 
         new_pred_source = s_iou
@@ -216,7 +215,7 @@ def main():
     parser.add_argument('--checkname', type=str, default=None)
     parser.add_argument('--save_folder', default='train_log/',
                         help='Directory for saving checkpoint models')
-    parser.add_argument('--visdom', default=True, type=str2bool,
+    parser.add_argument('--visdom', default=False, type=str2bool,
                         help='whether to Visdom')
     args = parser.parse_args()
     if not os.path.exists(args.save_folder):
