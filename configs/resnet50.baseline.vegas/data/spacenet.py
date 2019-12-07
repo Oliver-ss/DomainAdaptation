@@ -19,13 +19,12 @@ class Spacenet(data.Dataset):
     NUM_CLASSES = 2
 
     def __init__(self, city='Shanghai', split='train', img_root='/usr/xtmp/satellite/spacenet/',
-                 source_dist={'mean':(0.,0.,0.),'std':(1.,1.,1.,)}, target_dist={'mean':(0.,0.,0.),'std':(1.,1.,1.)}, if_pair=False):
+                 source_dist={'mean':(0.,0.,0.),'std':(1.,1.,1.,)}, if_pair=False):
         self.img_root = img_root
         self.name_root = '../../dataset/spacenet/domains/' + city
         with open(os.path.join(self.name_root, split + '.json')) as f:
             self.files = json.load(f)
         self.source_dist = source_dist
-        self.target_dist = target_dist
         self.split = split
         self.classes = [0, 1]
         self.class_names = ['bkg', 'building']
@@ -83,7 +82,7 @@ class Spacenet(data.Dataset):
             tr.FixScaleCrop(400),
             tr.HorizontalFlip(),
             tr.GaussianBlur(),
-            tr.Normalize(mean=self.target_dist['mean'], std=self.target_dist['std'], if_pair=True),
+            tr.Normalize(mean=self.source_dist['mean'], std=self.source_dist['std'], if_pair=True),
             tr.ToTensor(if_pair=True),
         ])
         return composed_transforms(sample)
@@ -103,7 +102,7 @@ class Spacenet(data.Dataset):
             tr.RandomScaleCrop(base_size=400, crop_size=400, fill=0),
             tr.HorizontalFlip(),
             tr.GaussianBlur(),
-            tr.Normalize(mean=self.target_dist['mean'], std=self.target_dist['std'], if_pair=True),
+            tr.Normalize(mean=self.source_dist['mean'], std=self.source_dist['std'], if_pair=True),
             tr.ToTensor(if_pair=True),
         ])
         return composed_transforms(sample)

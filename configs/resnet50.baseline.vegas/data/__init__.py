@@ -3,8 +3,8 @@ from torch.utils.data import DataLoader
 
 def make_data_loader(config):
 
-    train_set = spacenet.Spacenet(city=config.dataset, split='train', img_root=config.img_root)
-    val_set = spacenet.Spacenet(city=config.dataset, split='val', img_root=config.img_root)
+    train_set = spacenet.Spacenet(city=config.dataset, split='train', img_root=config.img_root, source_dist=config.source_dist)
+    val_set = spacenet.Spacenet(city=config.dataset, split='val', img_root=config.img_root. source_dist=config.source_dist)
     #test_set = spacenet.Spacenet(city=config.dataset, split='test', img_root=config.img_root)
 
     num_class = train_set.NUM_CLASSES
@@ -19,8 +19,8 @@ def make_data_loader(config):
 
 def make_target_data_loader(config):
 
-    train_set = spacenet.Spacenet(city=config.target, split='train', img_root=config.img_root, if_pair=True)
-    val_set = spacenet.Spacenet(city=config.target, split='val', img_root=config.img_root, if_pair=True)
+    train_set = spacenet.Spacenet(city=config.target, split='train', img_root=config.img_root, source_dist=config.target_dist, if_pair=True)
+    val_set = spacenet.Spacenet(city=config.target, split='val', img_root=config.img_root, source_dist=config.target_dist, if_pair=True)
     #test_set = spacenet.Spacenet(city=config.dataset, split='test', img_root=config.img_root)
 
     num_class = train_set.NUM_CLASSES

@@ -16,9 +16,9 @@ class Config:
     #Data
     all_dataset = ['Shanghai', 'Vegas', 'Paris', 'Khartoum']
     dataset = 'Vegas'
-    source_mean_std = mean_std[dataset]
+    source_dist = mean_std[dataset]
     target = 'Shanghai'
-    target_mean_std = mean_std[target]
+    target_dist = mean_std[target]
     train_num_workers = 4
     val_num_workers = 2
     img_root = '/usr/xtmp/satellite/spacenet/'
