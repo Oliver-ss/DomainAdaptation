@@ -11,7 +11,7 @@ from model.deeplab import *
 from utils.loss import SegmentationLosses
 from utils.lr_scheduler import LR_Scheduler
 from utils.metrics import Evaluator
-from tensorboardX import SummaryWriter
+from utils.summaries import TensorboardSummary
 
 import json
 import visdom
@@ -51,7 +51,7 @@ class Trainer(object):
         self.scheduler = LR_Scheduler(config.lr_scheduler, config.lr,
                                       config.epochs, len(self.train_loader),
                                       config.lr_step, config.warmup_epochs)
-        self.writer = SummaryWriter('train_log')
+        self.summary = TensorboardSummary('train_log')
         # Using cuda
         if args.cuda:
             self.model = torch.nn.DataParallel(self.model)
@@ -105,7 +105,7 @@ class Trainer(object):
             self.optimizer.step()
 
             train_loss += seg_loss.item()
-            self.writer.add_scalar('Train/Loss', loss.item(), itr)
+            self.summary.writer.add_scalar('Train/Loss', loss.item(), itr)
             tbar.set_description('Train loss: %.3f' % (train_loss / (i + 1)))
 
         print('[Epoch: %d, numImages: %5d]' % (epoch, i * self.config.batch_size + A_image.data.shape[0]))
@@ -140,7 +140,7 @@ class Trainer(object):
                 # Add batch sample into evaluator
                 self.evaluator.add_batch(target, pred)
 
-            self.writer.add_scalar('Val/Loss', test_loss/(i+1), epoch)
+            self.summary.writer.add_scalar('Val/Loss', test_loss/(i+1), epoch)
             # Fast test during the training
             Acc = self.evaluator.Building_Acc()
             IoU = self.evaluator.Building_IoU()
@@ -156,12 +156,12 @@ class Trainer(object):
 
             if if_source:
                 names = ['source', 'source_acc', 'source_IoU', 'source_mIoU']
-                self.writer.add_scalar('Val/SourceAcc', Acc, epoch)
-                self.writer.add_scalar('Val/SourceIoU', IoU, epoch)
+                self.summary.writer.add_scalar('Val/SourceAcc', Acc, epoch)
+                self.summary.writer.add_scalar('Val/SourceIoU', IoU, epoch)
             else:
                 names = ['target', 'target_acc', 'target_IoU', 'target_mIoU']
-                self.writer.add_scalar('Val/TargetAcc', Acc, epoch)
-                self.writer.add_scalar('Val/TargetIoU', IoU, epoch)
+                self.summary.writer.add_scalar('Val/TargetAcc', Acc, epoch)
+                self.summary.writer.add_scalar('Val/TargetIoU', IoU, epoch)
 
             # Draw Visdom
             if self.visdom:

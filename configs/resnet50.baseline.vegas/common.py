@@ -27,13 +27,13 @@ class Config:
     freeze_bn = False
     sync_bn = False
     loss = 'ce' #['ce', 'focal']
-    epochs = 100
+    epochs = 300
     lr = 1e-3
     momentum = 0.9
     weight_decay = 5e-4
-    lr_scheduler = 'poly'
+    lr_scheduler = 'cos'
     lr_step = 5
-    warmup_epochs = 10
+    warmup_epochs = 50
     lambda_adv = 0.001
 
 
