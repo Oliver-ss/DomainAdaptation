@@ -136,7 +136,7 @@ class Trainer(object):
 
             # Supervised loss
             seg_loss = self.criterion(A_output, A_target)
-            ins_loss = 0.1 * self.instance_loss(B_output, B_output_pair)
+            ins_loss = 0.01 * self.instance_loss(B_output, B_output_pair)
             # Unsupervised bn loss
             main_loss = seg_loss + ins_loss
             main_loss.backward()
