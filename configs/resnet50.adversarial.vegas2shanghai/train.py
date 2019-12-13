@@ -36,7 +36,7 @@ class Trainer(object):
                         sync_bn=config.sync_bn,
                         freeze_bn=config.freeze_bn)
 
-        #self.D = Discriminator(num_classes=self.nclass, ndf=16)
+        self.D = Discriminator(num_classes=self.nclass, ndf=16)
 
         train_params = [{'params': self.model.get_1x_lr_params(), 'lr': config.lr},
                         {'params': self.model.get_10x_lr_params(), 'lr': config.lr * config.lr_ratio}]
@@ -44,14 +44,12 @@ class Trainer(object):
         # Define Optimizer
         self.optimizer = torch.optim.SGD(train_params, momentum=config.momentum,
                                     weight_decay=config.weight_decay)
-        #self.D_optimizer = torch.optim.Adam(self.D.parameters(), lr=config.lr, betas=(0.9, 0.99))
+        self.D_optimizer = torch.optim.Adam(self.D.parameters(), lr=config.lr, betas=(0.9, 0.99))
 
         # Define Criterion
         # whether to use class balanced weights
         self.criterion = SegmentationLosses(weight=None, cuda=args.cuda).build_loss(mode=config.loss)
-        #self.model, self.optimizer = model, optimizer
         self.entropy_mini_loss = MinimizeEntropyLoss()
-        #self.batchloss = BatchLoss()
         self.bottleneck_loss = BottleneckLoss()
         self.instance_loss = InstanceLoss()
         # Define Evaluator
@@ -62,8 +60,8 @@ class Trainer(object):
                                       config.lr_step, config.warmup_epochs)
         self.summary = TensorboardSummary('./train_log')
         # labels for adversarial training
-        #self.source_label = 0
-        #self.target_label = 1
+        self.source_label = 0
+        self.target_label = 1
 
         # Using cuda
         if args.cuda:
@@ -72,13 +70,12 @@ class Trainer(object):
             # cudnn.benchmark = True
             self.model = self.model.cuda()
 
-            #self.D = torch.nn.DataParallel(self.D)
-            #patch_replication_callback(self.D)
-            #self.D = self.D.cuda()
+            self.D = torch.nn.DataParallel(self.D)
+            patch_replication_callback(self.D)
+            self.D = self.D.cuda()
 
         self.best_pred_source = 0.0
         self.best_pred_target = 0.0
-        #self.bn_loss = 100
         # Resuming checkpoint
         if args.resume is not None:
             if not os.path.isfile(args.resume):
@@ -94,6 +91,8 @@ class Trainer(object):
     def training(self, epoch):
         train_loss, seg_loss_sum, bn_loss_sum, entropy_loss_sum, adv_loss_sum, d_loss_sum, ins_loss_sum = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
         self.model.train()
+        if config.freeze_bn:
+            self.model.module.freeze_bn()
         tbar = tqdm(self.train_loader)
         num_img_tr = len(self.train_loader)
         target_train_iterator = iter(self.target_train_loader)
@@ -120,71 +119,76 @@ class Trainer(object):
                 B_image, B_target, B_image_pair = B_image.cuda(), B_target.cuda(), B_image_pair.cuda()
 
             self.scheduler(self.optimizer, i, epoch, self.best_pred_source, self.best_pred_target, self.config.lr_ratio)
-            #self.scheduler(self.D_optimizer, i, epoch, self.best_pred_source, self.best_pred_target)
+            self.scheduler(self.D_optimizer, i, epoch, self.best_pred_source, self.best_pred_target, self.config.lr_ratio)
 
             A_output, A_feat, A_low_feat = self.model(A_image)
             B_output, B_feat, B_low_feat = self.model(B_image)
-            B_output_pair, B_feat_pair, B_low_feat_pair = self.model(B_image_pair)
-            B_output_pair, B_feat_pair, B_low_feat_pair = flip(B_output_pair, dim=-1), flip(B_feat_pair, dim=-1), flip(B_low_feat_pair, dim=-1)
+            #B_output_pair, B_feat_pair, B_low_feat_pair = self.model(B_image_pair)
+            #B_output_pair, B_feat_pair, B_low_feat_pair = flip(B_output_pair, dim=-1), flip(B_feat_pair, dim=-1), flip(B_low_feat_pair, dim=-1)
 
             self.optimizer.zero_grad()
-            #self.D_optimizer.zero_grad()
+            self.D_optimizer.zero_grad()
 
             # Train seg network
-            #for param in self.D.parameters():
-            #    param.requires_grad = False
+            for param in self.D.parameters():
+                param.requires_grad = False
 
             # Supervised loss
             seg_loss = self.criterion(A_output, A_target)
-            ins_loss = 0.01 * self.instance_loss(B_output, B_output_pair)
-            # Unsupervised bn loss
-            main_loss = seg_loss + ins_loss
-            main_loss.backward()
+            main_loss = seg_loss
+
+            # Unsupervised loss
+            #ins_loss = 0.01 * self.instance_loss(B_output, B_output_pair)
+            #main_loss += ins_loss
+
             # Train adversarial loss
-            #D_out = self.D(prob_2_entropy(F.softmax(B_output)))
-            #adv_loss = bce_loss(D_out, self.source_label)
-            #main_loss += self.config.lambda_adv * adv_loss
-            #main_loss.backward()
+            D_out = self.D(prob_2_entropy(F.softmax(B_output)))
+            adv_loss = bce_loss(D_out, self.source_label)
+
+            main_loss += self.config.lambda_adv * adv_loss
+            main_loss.backward()
 
             # Train discriminator
-            #for param in self.D.parameters():
-            #    param.requires_grad = True
-            #A_output_detach = A_output.detach()
-            #B_output_detach = B_output.detach()
+            for param in self.D.parameters():
+                param.requires_grad = True
+            A_output_detach = A_output.detach()
+            B_output_detach = B_output.detach()
             # source
-            #D_source = self.D(prob_2_entropy(F.softmax(A_output_detach)))
-            #source_loss = bce_loss(D_source, self.source_label)
-            #source_loss = source_loss / 2
+            D_source = self.D(prob_2_entropy(F.softmax(A_output_detach)))
+            source_loss = bce_loss(D_source, self.source_label)
+            source_loss = source_loss / 2
             # target
-            #D_target = self.D(prob_2_entropy(F.softmax(B_output_detach)))
-            #target_loss = bce_loss(D_target, self.target_label)
-            #target_loss = target_loss / 2
-            #d_loss = source_loss + target_loss
-            #d_loss.backward()
+            D_target = self.D(prob_2_entropy(F.softmax(B_output_detach)))
+            target_loss = bce_loss(D_target, self.target_label)
+            target_loss = target_loss / 2
+            d_loss = source_loss + target_loss
+            d_loss.backward()
 
             self.optimizer.step()
-            #self.D_optimizer.step()
+            self.D_optimizer.step()
 
             seg_loss_sum += seg_loss.item()
-            ins_loss_sum += ins_loss.item()
-            #bn_loss_sum += bottleneck_loss.item()
-            #adv_loss_sum += self.config.lambda_adv * adv_loss.item()
-            #d_loss_sum += d_loss.item()
+            #ins_loss_sum += ins_loss.item()
+            adv_loss_sum += self.config.lambda_adv * adv_loss.item()
+            d_loss_sum += d_loss.item()
 
             #train_loss += seg_loss.item() + self.config.lambda_adv * adv_loss.item()
-            train_loss += seg_loss.item() + ins_loss.item()
+            train_loss += seg_loss.item()
             self.summary.writer.add_scalar('Train/SegLoss', seg_loss.item(), itr)
-            self.summary.writer.add_scalar('Train/InsLoss', ins_loss.item(), itr)
+            #self.summary.writer.add_scalar('Train/InsLoss', ins_loss.item(), itr)
+            self.summary.writer.add_scalar('Train/AdvLoss', adv_loss.item(), itr)
+            self.summary.writer.add_scalar('Train/DiscriminatorLoss', d_loss.item(), itr)
             tbar.set_description('Train loss: %.3f' % (train_loss / (i + 1)))
 
             # Show the results of the last iteration
             #if i == len(self.train_loader)-1:
+        print("Add Train images at epoch"+str(epoch))
         self.summary.visualize_image('Train-Source', self.config.dataset, A_image, A_target, A_output, epoch, 5)
         self.summary.visualize_image('Train-Target', self.config.target, B_image, B_target, B_output, epoch, 5)
         print('[Epoch: %d, numImages: %5d]' % (epoch, i * self.config.batch_size + A_image.data.shape[0]))
-        #print('Loss: %.3f' % train_loss)
-        print('Seg Loss: %.3f' % seg_loss_sum)
-        print('Ins Loss: %.3f' % ins_loss_sum)
+        print('Loss: %.3f' % train_loss)
+        #print('Seg Loss: %.3f' % seg_loss_sum)
+        #print('Ins Loss: %.3f' % ins_loss_sum)
         #print('BN Loss: %.3f' % bn_loss_sum)
         #print('Adv Loss: %.3f' % adv_loss_sum)
         #print('Discriminator Loss: %.3f' % d_loss_sum)
@@ -248,8 +252,10 @@ class Trainer(object):
                 # Add batch sample into evaluator
                 self.evaluator.add_batch(target_, pred)
             if if_source:
+                print("Add Validation-Source images at epoch"+str(epoch))
                 self.summary.visualize_image('Val-Source', self.config.dataset, image, target, output, epoch, 5)
             else:
+                print("Add Validation-Target images at epoch"+str(epoch))
                 self.summary.visualize_image('Val-Target', self.config.target, image, target, output, epoch, 5)
             #feat_mean /= (i+1)
             #low_feat_mean /= (i+1)
@@ -268,7 +274,6 @@ class Trainer(object):
             print('[Epoch: %d, numImages: %5d]' % (epoch, i * self.config.batch_size + image.data.shape[0]))
             print("Acc:{}, IoU:{}, mIoU:{}".format(Acc, IoU, mIoU))
             print('Loss: %.3f' % test_loss)
-            #print('Adv Loss: %.3f' % adv_loss)
 
             if if_source:
                 names = ['source', 'source_acc', 'source_IoU', 'source_mIoU']
@@ -308,17 +313,13 @@ class Trainer(object):
         new_pred_source = s_iou
         new_pred_target = t_iou
 
-        #bn_loss = np.abs(s_m - t_m).mean() + np.abs(s_lm - t_lm).mean() + np.abs(s_v - t_v).mean() + np.abs(s_lv - t_lv).mean()
-        #bn_loss = bn_loss.astype('float64')
         if new_pred_source > self.best_pred_source or new_pred_target > self.best_pred_target:
-        #if new_pred_source > self.best_pred_source or bn_loss < self.bn_loss:
             is_best = True
             self.best_pred_source = max(new_pred_source, self.best_pred_source)
             self.best_pred_target = max(new_pred_target, self.best_pred_target)
-            #self.bn_loss = min(bn_loss, self.bn_loss)
-            print('Saving state, epoch:', epoch)
-            torch.save(self.model.module.state_dict(), self.args.save_folder + 'models/'
-                       + 'epoch' + str(epoch) + '.pth')
+        print('Saving state, epoch:', epoch)
+        torch.save(self.model.module.state_dict(), self.args.save_folder + 'models/'
+                    + 'epoch' + str(epoch) + '.pth')
         loss_file = {'s_Acc': s_acc, 's_IoU': s_iou, 's_mIoU': s_miou, 't_Acc':t_acc, 't_IoU':t_iou, 't_mIoU':t_miou}
         with open(os.path.join(self.args.save_folder, 'eval', 'epoch' + str(epoch) + '.json'), 'w') as f:
             json.dump(loss_file, f)
