@@ -1,1 +1,1 @@
-/usr/xtmp/satellite/train_models/resnet50.adversarial.vegas2shanghai.new
+/usr/xtmp/satellite/train_models/resnet50.instance-same.finetune-adversarial.vegas2shanghai
