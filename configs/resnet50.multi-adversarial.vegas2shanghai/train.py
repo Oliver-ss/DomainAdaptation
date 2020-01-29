@@ -37,7 +37,7 @@ class Trainer(object):
                         freeze_bn=config.freeze_bn)
 
         self.D = Discriminator(num_classes=self.nclass, ndf=16)
-        self.D_low = Discriminator(num_class=256, ndf=16)
+        self.D_low = Discriminator(num_classes=256, ndf=16)
 
         train_params = [{'params': self.model.get_1x_lr_params(), 'lr': config.lr},
                         {'params': self.model.get_10x_lr_params(), 'lr': config.lr * config.lr_ratio}]
@@ -75,7 +75,7 @@ class Trainer(object):
             self.D = torch.nn.DataParallel(self.D)
             patch_replication_callback(self.D)
             self.D = self.D.cuda()
-            
+
             self.D_low = torch.nn.DataParallel(self.D_low)
             patch_replication_callback(self.D_low)
             self.D_low = self.D_low.cuda()
@@ -153,11 +153,11 @@ class Trainer(object):
             # Train adversarial loss
             D_out = self.D(prob_2_entropy(F.softmax(B_output)))
             adv_loss = bce_loss(D_out, self.source_label)
-            
+
             D_low_out = self.D_low(B_low_feat)
             adv_loss_low = bce_loss(D_low_out, self.source_label)
-            
-            
+
+
             main_loss += self.config.lambda_adv * adv_loss
             main_loww += self.config.lambda_adv_low * adv_loss_low
             main_loss.backward()
@@ -175,7 +175,7 @@ class Trainer(object):
             D_source = self.D(prob_2_entropy(F.softmax(A_output_detach)))
             source_loss = bce_loss(D_source, self.source_label)
             source_loss = source_loss / 2
-            
+
             D_low_source = self.D_low(A_low_feat_detach)
             source_loss_low = bce_loss(D_low_source, self.source_label)
             source_loss_low = source_loss_low / 2
@@ -183,18 +183,18 @@ class Trainer(object):
             D_target = self.D(prob_2_entropy(F.softmax(B_output_detach)))
             target_loss = bce_loss(D_target, self.target_label)
             target_loss = target_loss / 2
-            
+
             D_low_target = self.D_low(B_low_feat_detach)
             target_loss_low = bce_loss(D_low_target, self.target_label)
             target_loss_low = target_loss_low / 2
-            
+
             d_loss = source_loss + target_loss
             d_loss.backward()
-            
+
             d_loss_low = source_loss_low + target_loss_low
             d_loss_low.backward()
 
-            
+
             self.optimizer.step()
             self.D_optimizer.step()
             self.D_low_optimizer.step()
