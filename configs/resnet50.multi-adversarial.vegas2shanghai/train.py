@@ -95,7 +95,7 @@ class Trainer(object):
                   .format(args.resume, args.start_epoch))
 
     def training(self, epoch):
-        train_loss, seg_loss_sum, bn_loss_sum, entropy_loss_sum, adv_loss_sum, adv_loss_low_sum, d_loss_sum, ins_loss_sum = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+        train_loss, seg_loss_sum, bn_loss_sum, entropy_loss_sum, adv_loss_sum, adv_loss_low_sum, d_loss_sum, d_loss_low_sum, ins_loss_sum = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
         self.model.train()
         if config.freeze_bn:
             self.model.module.freeze_bn()
