@@ -95,7 +95,7 @@ class Trainer(object):
                   .format(args.resume, args.start_epoch))
 
     def training(self, epoch):
-        train_loss, seg_loss_sum, bn_loss_sum, entropy_loss_sum, adv_loss_sum, d_loss_sum, ins_loss_sum = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+        train_loss, seg_loss_sum, bn_loss_sum, entropy_loss_sum, adv_loss_sum, adv_loss_low_sum, d_loss_sum, ins_loss_sum = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
         self.model.train()
         if config.freeze_bn:
             self.model.module.freeze_bn()
@@ -118,7 +118,7 @@ class Trainer(object):
                 target_train_iterator = iter(self.target_train_loader)
                 target_sample = next(target_train_iterator)
 
-            #B_image, B_target, B_image_pair = target_sample['image'], target_sample['label'], target_sample['image_pair']
+            B_image, B_target, B_image_pair = target_sample['image'], target_sample['label'], target_sample['image_pair']
 
             if self.args.cuda:
                 A_image, A_target = A_image.cuda(), A_target.cuda()
@@ -159,7 +159,7 @@ class Trainer(object):
 
 
             main_loss += self.config.lambda_adv * adv_loss
-            main_loww += self.config.lambda_adv_low * adv_loss_low
+            main_loss += self.config.lambda_adv_low * adv_loss_low
             main_loss.backward()
 
             # Train discriminator
