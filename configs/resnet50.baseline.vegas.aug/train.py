@@ -76,7 +76,6 @@ class Trainer(object):
             self.model.module.freeze_bn()
         tbar = tqdm(self.train_loader)
         num_img_tr = len(self.train_loader)
-        target_train_iterator = iter(self.target_train_loader)
         for i, sample in enumerate(tbar):
             itr = epoch * len(self.train_loader) + i
             self.summary.writer.add_scalar('Train/lr', self.optimizer.param_groups[0]['lr'], itr)

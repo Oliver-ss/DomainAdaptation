@@ -40,7 +40,7 @@ class LR_Scheduler(object):
         self.epoch = -1
         self.warmup_iters = warmup_epochs * iters_per_epoch
 
-    def __call__(self, optimizer, i, epoch, best_pred_source, best_pred_target):
+    def __call__(self, optimizer, i, epoch, best_pred_source, best_pred_target, lr_ratio):
         T = epoch * self.iters_per_epoch + i
         if self.mode == 'cos':
             lr = 0.5 * self.lr * (1 + math.cos(1.0 * T / self.warmup_iters * math.pi))
@@ -51,8 +51,8 @@ class LR_Scheduler(object):
         else:
             raise NotImplemented
         # warm up lr schedule
-        if self.warmup_iters > 0 and T < self.warmup_iters:
-            lr = lr * 1.0 * T / self.warmup_iters
+        #if self.warmup_iters > 0 and T < self.warmup_iters:
+        #    lr = lr * 1.0 * T / self.warmup_iters
         if epoch > self.epoch:
             print('\n=>Epoches %i, learning rate = %.4f, \
                 previous best_source = %.4f' % (epoch, lr, best_pred_source))
@@ -60,13 +60,13 @@ class LR_Scheduler(object):
                 previous best_target = %.4f' % (epoch, lr, best_pred_target))
             self.epoch = epoch
         assert lr >= 0
-        self._adjust_learning_rate(optimizer, lr)
+        self._adjust_learning_rate(optimizer, lr, lr_ratio)
 
-    def _adjust_learning_rate(self, optimizer, lr):
+    def _adjust_learning_rate(self, optimizer, lr, lr_ratio):
         if len(optimizer.param_groups) == 1:
             optimizer.param_groups[0]['lr'] = lr
         else:
             # enlarge the lr at the head
             optimizer.param_groups[0]['lr'] = lr
             for i in range(1, len(optimizer.param_groups)):
-                optimizer.param_groups[i]['lr'] = lr * 10
+                optimizer.param_groups[i]['lr'] = lr * lr_ratio

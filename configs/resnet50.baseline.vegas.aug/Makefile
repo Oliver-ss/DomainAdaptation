@@ -2,9 +2,9 @@ train:
 	python3 train.py
 
 watch:
-	python3 ../../scripts/show_table_adv.py
+	python3 ../../scripts/show_table.py 1
 
 test:
-	python3 ../../scripts/test_bottleneck.py ${MODEL} ${BN} ${SAVE}
+	python3 ../../scripts/base_test.py ${MODEL} ${BN} ${SAVE}
 BN = True
 SAVE = 0
