@@ -8,22 +8,18 @@ from common import config
 from data import make_data_loader, make_target_data_loader
 from model.sync_batchnorm.replicate import patch_replication_callback
 from model.deeplab import *
-from utils.loss import SegmentationLosses
+from utils.loss import SegmentationLosses, MinimizeEntropyLoss, BottleneckLoss, InstanceLoss
 from utils.lr_scheduler import LR_Scheduler
 from utils.metrics import Evaluator
+from utils.func import bce_loss, prob_2_entropy, flip
 from utils.summaries import TensorboardSummary
-
 import json
-import visdom
 import torch
 
 class Trainer(object):
     def __init__(self, config, args):
         self.args = args
         self.config = config
-        self.visdom = args.visdom
-        if args.visdom:
-            self.vis = visdom.Visdom(env=os.getcwd().split('/')[-1],port=8888)
         # Define Dataloader
         self.train_loader, self.val_loader, self.test_loader, self.nclass = make_data_loader(config)
 
@@ -36,7 +32,7 @@ class Trainer(object):
 
 
         train_params = [{'params': self.model.get_1x_lr_params(), 'lr': config.lr},
-                        {'params': self.model.get_10x_lr_params(), 'lr': config.lr * 10}]
+                        {'params': self.model.get_10x_lr_params(), 'lr': config.lr * config.lr_ratio}]
 
         # Define Optimizer
         self.optimizer = torch.optim.SGD(train_params, momentum=config.momentum,
@@ -51,14 +47,14 @@ class Trainer(object):
         self.scheduler = LR_Scheduler(config.lr_scheduler, config.lr,
                                       config.epochs, len(self.train_loader),
                                       config.lr_step, config.warmup_epochs)
-        self.summary = TensorboardSummary('train_log')
+        self.summary = TensorboardSummary('./train_log')
+
         # Using cuda
         if args.cuda:
             self.model = torch.nn.DataParallel(self.model)
             patch_replication_callback(self.model)
             # cudnn.benchmark = True
             self.model = self.model.cuda()
-
 
         self.best_pred_source = 0.0
         # Resuming checkpoint
@@ -74,47 +70,47 @@ class Trainer(object):
                   .format(args.resume, args.start_epoch))
 
     def training(self, epoch):
-        train_loss = 0.0
+        train_loss, seg_loss_sum, bn_loss_sum, entropy_loss_sum, adv_loss_sum, d_loss_sum, ins_loss_sum = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
         self.model.train()
+        if config.freeze_bn:
+            self.model.module.freeze_bn()
         tbar = tqdm(self.train_loader)
         num_img_tr = len(self.train_loader)
         for i, sample in enumerate(tbar):
             itr = epoch * len(self.train_loader) + i
-            if self.visdom:
-                self.vis.line(X=torch.tensor([itr]), Y=torch.tensor([self.optimizer.param_groups[0]['lr']]),
-                          win='lr', opts=dict(title='lr', xlabel='iter', ylabel='lr'),
-                          update='append' if itr>0 else None)
+            self.summary.writer.add_scalar('Train/lr', self.optimizer.param_groups[0]['lr'], itr)
             A_image, A_target = sample['image'], sample['label']
 
             if self.args.cuda:
                 A_image, A_target = A_image.cuda(), A_target.cuda()
 
-            self.scheduler(self.optimizer, i, epoch, self.best_pred_source, 0)
+            self.scheduler(self.optimizer, i, epoch, self.best_pred_source, 0., self.config.lr_ratio)
 
             A_output, A_feat, A_low_feat = self.model(A_image)
 
             self.optimizer.zero_grad()
 
-
+            # Train seg network
             # Supervised loss
             seg_loss = self.criterion(A_output, A_target)
-            loss = seg_loss
-            loss.backward()
+            main_loss = seg_loss
 
+            main_loss.backward()
 
             self.optimizer.step()
 
+            seg_loss_sum += seg_loss.item()
+
             train_loss += seg_loss.item()
-            self.summary.writer.add_scalar('Train/Loss', loss.item(), itr)
+            self.summary.writer.add_scalar('Train/SegLoss', seg_loss.item(), itr)
             tbar.set_description('Train loss: %.3f' % (train_loss / (i + 1)))
 
+            # Show the results of the last iteration
+            #if i == len(self.train_loader)-1:
+        print("Add Train images at epoch"+str(epoch))
+        self.summary.visualize_image('Train-Source', self.config.dataset, A_image, A_target, A_output, epoch, 5)
         print('[Epoch: %d, numImages: %5d]' % (epoch, i * self.config.batch_size + A_image.data.shape[0]))
-        print('Seg Loss: %.3f' % train_loss)
-
-        if self.visdom:
-            self.vis.line(X=torch.tensor([epoch]), Y=torch.tensor([seg_loss_sum]), win='train_loss', name='Seg_loss',
-                          opts=dict(title='loss', xlabel='epoch', ylabel='loss'),
-                          update='append' if epoch > 0 else None)
+        print('Loss: %.3f' % train_loss)
 
     def validation(self, epoch):
         def get_metrics(tbar, if_source=False):
@@ -129,18 +125,23 @@ class Trainer(object):
                 with torch.no_grad():
                     output, low_feat, feat = self.model(image)
 
+
                 loss = self.criterion(output, target)
                 test_loss += loss.item()
                 tbar.set_description('Test loss: %.3f' % (test_loss / (i + 1)))
                 pred = output.data.cpu().numpy()
 
-                target = target.cpu().numpy()
+                target_ = target.cpu().numpy()
                 pred = np.argmax(pred, axis=1)
 
                 # Add batch sample into evaluator
-                self.evaluator.add_batch(target, pred)
-
-            self.summary.writer.add_scalar('Val/Loss', test_loss/(i+1), epoch)
+                self.evaluator.add_batch(target_, pred)
+            if if_source:
+                print("Add Validation-Source images at epoch"+str(epoch))
+                self.summary.visualize_image('Val-Source', self.config.dataset, image, target, output, epoch, 5)
+            else:
+                print("Add Validation-Target images at epoch"+str(epoch))
+                self.summary.visualize_image('Val-Target', self.config.target, image, target, output, epoch, 5)
             # Fast test during the training
             Acc = self.evaluator.Building_Acc()
             IoU = self.evaluator.Building_IoU()
@@ -163,18 +164,6 @@ class Trainer(object):
                 self.summary.writer.add_scalar('Val/TargetAcc', Acc, epoch)
                 self.summary.writer.add_scalar('Val/TargetIoU', IoU, epoch)
 
-            # Draw Visdom
-            if self.visdom:
-                self.vis.line(X=torch.tensor([epoch]), Y=torch.tensor([test_loss]), win='val_loss', name=names[0],
-                              update='append')
-                self.vis.line(X=torch.tensor([epoch]), Y=torch.tensor([Acc]), win='metrics', name=names[1],
-                              opts=dict(title='metrics', xlabel='epoch', ylabel='performance'),
-                              update='append' if epoch > 0 else None)
-                self.vis.line(X=torch.tensor([epoch]), Y=torch.tensor([IoU]), win='metrics', name=names[2],
-                              update='append')
-                self.vis.line(X=torch.tensor([epoch]), Y=torch.tensor([mIoU]), win='metrics', name=names[3],
-                              update='append')
-
             return Acc, IoU, mIoU
 
         self.model.eval()
@@ -186,9 +175,9 @@ class Trainer(object):
         if new_pred_source > self.best_pred_source:
             is_best = True
             self.best_pred_source = max(new_pred_source, self.best_pred_source)
-            print('Saving state, epoch:', epoch)
-            torch.save(self.model.module.state_dict(), self.args.save_folder + 'models/'
-                       + 'epoch' + str(epoch) + '.pth')
+        print('Saving state, epoch:', epoch)
+        torch.save(self.model.module.state_dict(), self.args.save_folder + 'models/'
+                    + 'epoch' + str(epoch) + '.pth')
         loss_file = {'s_Acc': s_acc, 's_IoU': s_iou, 's_mIoU': s_miou}
         with open(os.path.join(self.args.save_folder, 'eval', 'epoch' + str(epoch) + '.json'), 'w') as f:
             json.dump(loss_file, f)
@@ -215,24 +204,17 @@ def main():
     parser.add_argument('--checkname', type=str, default=None)
     parser.add_argument('--save_folder', default='train_log/',
                         help='Directory for saving checkpoint models')
-    parser.add_argument('--visdom', default=False, type=str2bool,
-                        help='whether to Visdom')
     args = parser.parse_args()
-    if not os.path.exists(args.save_folder):
-        os.mkdir(args.save_folder)
-    if not os.path.exists(args.save_folder + 'eval/'):
-        os.mkdir(args.save_folder + 'eval/')
-    # if not os.path.exists(args.save_folder + 'models/'):
-    #     os.mkdir(args.save_folder + 'models/')
     if not os.path.exists('/usr/xtmp/satellite/train_models/' + os.getcwd().split('/')[-1]):
         os.mkdir('/usr/xtmp/satellite/train_models/' + os.getcwd().split('/')[-1])
-        os.symlink('/usr/xtmp/satellite/train_models/' + os.getcwd().split('/')[-1], args.save_folder + 'models')
+        os.symlink('/usr/xtmp/satellite/train_models/' + os.getcwd().split('/')[-1], args.save_folder[:-1])
         print('Create soft link!')
+    if not os.path.exists(args.save_folder + 'eval/'):
+        os.mkdir(args.save_folder + 'eval/')
+    if not os.path.exists(args.save_folder + 'models/'):
+        os.mkdir(args.save_folder + 'models/')
 
     args.cuda = not args.no_cuda and torch.cuda.is_available()
-    #if args.cuda:
-    #    print('Using cuda device:', args.gpu)
-    #    os.environ['CUDA_VISIBLE_DEVICES'] = str(args.gpu)
 
     print(args)
     torch.manual_seed(args.seed)

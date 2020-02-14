@@ -14,7 +14,6 @@ import cv2
 
 with open('../../scripts/mean_std.json') as f:
     dist = json.load(f)
-
 def recover_images(city, images):
     mean, std = dist[city]['mean'], dist[city]['std']
     for im in images:
@@ -59,10 +58,10 @@ class TensorboardSummary(object):
     def visualize_image(self, prefix, city, image, target, output, global_step, size=10):
         images = image[:size].clone().cpu().data
         images = recover_images(city, images)
-        grid_image = make_grid(images, 5, normalize=False)
-        self.writer.add_image(prefix+'/Image', grid_image, global_step)
-        pred = np.argmax(output[:size].detach().cpu().numpy(), 1)
-        target = target[:size].detach().cpu().numpy()
+        #grid_image = make_grid(images, 5, normalize=False)
+        #self.writer.add_image(prefix+'/Image', grid_image, global_step)
+        pred = np.argmax(output[:10].detach().cpu().numpy(), 1)
+        target = target[:10].detach().cpu().numpy()
         overlap_pred = fuse_images(images.cpu().numpy(), pred)
         overlap_gt = fuse_images(images.cpu().numpy(), target)
         grid_image = make_grid(torch.from_numpy(overlap_pred), 5, normalize=False)
@@ -77,8 +76,8 @@ class TensorboardSummary(object):
         grid_image = make_grid(torch.from_numpy(color_images(pred, target)), 5, normalize=True, range=(0,255))
         self.writer.add_image(prefix+'/Color', grid_image, global_step)
 
-        #grid_image = make_grid(images, 5, normalize=False)
-        #self.writer.add_image(prefix+'/Image', grid_image, global_step)
+        grid_image = make_grid(images, 5, normalize=False)
+        self.writer.add_image(prefix+'/Image', grid_image, global_step)
 if __name__ == "__main__":
     import sys
     sys.path.append(os.getcwd())

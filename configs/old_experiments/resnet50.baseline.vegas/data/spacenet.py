@@ -11,6 +11,7 @@ import cv2
 from torch.utils import data
 from torchvision import transforms
 import data.custom_transforms as tr
+#import custom_transforms as tr
 import json
 from PIL import Image
 
@@ -61,8 +62,6 @@ class Spacenet(data.Dataset):
             tr.RandomHorizontalFlip(),
             tr.RandomScaleCrop(base_size=400, crop_size=400, fill=0),
             tr.RandomGaussianBlur(),
-            #tr.ConvertFromInts(),
-            #tr.PhotometricDistort(),
             tr.Normalize(mean=self.source_dist['mean'], std=self.source_dist['std']),
             tr.ToTensor(),
         ])

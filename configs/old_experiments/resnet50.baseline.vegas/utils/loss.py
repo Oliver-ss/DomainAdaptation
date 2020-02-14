@@ -29,9 +29,9 @@ class InstanceLoss(object):
         s = torch.exp(ans).sum(dim=1)
         ans = torch.exp(ans[:,0]).div(s)
         if self.cuda:
-            return -torch.log(ans).mean().cuda()
+            return -torch.log(ans).sum().cuda()
         else:
-            return -torch.log(ans).mean()
+            return -torch.log(ans).sum()
 
 
 class BottleneckLoss(object):

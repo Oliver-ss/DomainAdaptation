@@ -23,16 +23,15 @@ class Config:
     val_num_workers = 2
     img_root = '/usr/xtmp/satellite/spacenet/'
     #Train
-    batch_size = 8
+    batch_size = 16
     freeze_bn = False
     sync_bn = False
     loss = 'ce' #['ce', 'focal']
     epochs = 300
     lr = 1e-3
-    lr_ratio = 10
     momentum = 0.9
     weight_decay = 5e-4
-    lr_scheduler = 'poly'
+    lr_scheduler = 'cos'
     lr_step = 5
     warmup_epochs = 50
     lambda_adv = 0.001
