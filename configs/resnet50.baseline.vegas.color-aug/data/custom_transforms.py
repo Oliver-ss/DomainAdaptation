@@ -371,22 +371,26 @@ class BuildingRepaint(object):
         for i, p in enumerate(prob):
             if rnd < p:
                 ans = i
+                break
         return i
 
     def choose_color(self):
         r_ = random.random()
         g_ = random.random()
         b_ = random.random()
+        #print(r_,g_,b_)
         r = self.find_prob(r_, self.dist['red'])
-        g = self.find_prob(g_, self.dist['green'])
-        b = self.find_prob(b_, self.dist['blue'])
+        g = self.find_prob(r_, self.dist['green'])
+        b = self.find_prob(r_, self.dist['blue'])
         return (r, g, b)
 
     def __call__(self, sample):
         if random.random() < 0.5:
             img = sample['image']
-            mask = sample['label']
+            label = sample['label']
+            mask = label.copy()
             color = self.choose_color()
+            #print(color)
             img = img.astype(float)
             mask = mask.astype(float)
             if len(mask.shape) == 2:
@@ -398,9 +402,10 @@ class BuildingRepaint(object):
             im = mask.copy()
             for i, c in enumerate(color):
                 im[:,:,i] *= c
+            im = im * 0.5 + (img*mask)*0.5
             im_rev = img * (full-mask)
             im += im_rev
             return {'image':im,
-                    'label': mask}
+                    'label': label}
         else:
             return sample

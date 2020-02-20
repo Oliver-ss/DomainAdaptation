@@ -10,7 +10,8 @@ import scipy.misc as m
 import cv2
 from torch.utils import data
 from torchvision import transforms
-import data.custom_transforms as tr
+#import data.custom_transforms as tr
+import custom_transforms as tr
 import json
 from PIL import Image
 
@@ -20,7 +21,8 @@ class Spacenet(data.Dataset):
     def __init__(self, city='Shanghai', split='train', img_root='/usr/xtmp/satellite/spacenet/',
                  source_dist={'mean':(0.,0.,0.),'std':(1.,1.,1.,)}, if_pair=False, color_dist={}):
         self.img_root = img_root
-        self.name_root = '../../dataset/spacenet/domains/' + city
+        #self.name_root = '../../dataset/spacenet/domains/' + city
+        self.name_root = '../../../dataset/spacenet/domains/' + city
         with open(os.path.join(self.name_root, split + '.json')) as f:
             self.files = json.load(f)
         self.source_dist = source_dist
@@ -112,26 +114,39 @@ class Spacenet(data.Dataset):
 
 
 if __name__ == "__main__":
-    from torch.utils.data import DataLoader
-    spacenet_train = Spacenet(split='val', if_pair=True)
-    dataloader = DataLoader(spacenet_train, batch_size=2, shuffle=True, num_workers=2)
-    #print(spacenet_train.__getitem__(0))
+    from torch.utils.data import DataLoader    
+    def recover_image(image, dist):
+        mean, std = dist['mean'], dist['std']
+        for i, c in enumerate(image):
+            c *= std[i]
+            c += mean[i]
+        return image
+    with open('../../../scripts/mean_std.json') as f:
+        mean_std = json.load(f)
+    with open('../../../scripts/color.json') as f:
+        color = json.load(f)
+    source_dist = mean_std['Vegas']
+    color_dist = color['Shanghai']
+    spacenet_train = Spacenet(city='Vegas', split='train', img_root='/data/spacenet/',
+                    source_dist=source_dist, if_pair=False, color_dist=color_dist)
+    dataloader = DataLoader(spacenet_train, batch_size=1, shuffle=False, num_workers=1)
+    
     for ii, sample in enumerate(dataloader):
         for jj in range(sample["image"].size()[0]):
             img = sample['image'][jj].numpy()
             gt = sample['label'][jj].numpy()
-            pair = sample['image_pair'][jj].numpy()
-            #img = img.transpose(1,2,0)
-            #gt = gt[:,:,None]
-            print(img.shape)
-            print(gt.shape)
-            print(pair.shape)
-            #gt_ = gt.repeat(3, axis=2)
-            #show = np.hstack((img, gt_))
-            #cv2.imshow('show', show[:,:,::-1])
-            #c = chr(cv2.waitKey(0) & 0xff)
-            #if c == 'q':
-            #    exit()
+            gt = gt[:,:,None]
+            gt_ = gt.repeat(3, axis=2)
+            img = recover_image(img, source_dist)
+            img = img.transpose(1,2,0)
+            print(gt.max())
+            #print(img.shape)
+            #cv2.imshow('img', img[:,:,::-1])
+            show = np.hstack((img, gt_))
+            cv2.imshow('show', show[:,:,::-1])
+            c = chr(cv2.waitKey(0) & 0xff)
+            if c == 'q':
+                exit()
 
 
 
