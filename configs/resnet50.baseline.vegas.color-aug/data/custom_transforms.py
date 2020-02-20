@@ -376,8 +376,8 @@ class BuildingRepaint(object):
 
     def choose_color(self):
         r_ = random.random()
-        g_ = random.random()
-        b_ = random.random()
+        #g_ = random.random()
+        #b_ = random.random()
         #print(r_,g_,b_)
         r = self.find_prob(r_, self.dist['red'])
         g = self.find_prob(r_, self.dist['green'])
@@ -402,7 +402,7 @@ class BuildingRepaint(object):
             im = mask.copy()
             for i, c in enumerate(color):
                 im[:,:,i] *= c
-            im = im * 0.5 + (img*mask)*0.5
+            #im = im * 0.5 + (img*mask)*0.5
             im_rev = img * (full-mask)
             im += im_rev
             return {'image':im,
