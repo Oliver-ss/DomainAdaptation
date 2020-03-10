@@ -123,8 +123,8 @@ class Trainer(object):
 
             A_output, A_feat, A_low_feat = self.model(A_image)
             B_output, B_feat, B_low_feat = self.model(B_image)
-            B_output_pair, B_feat_pair, B_low_feat_pair = self.model(B_image_pair)
-            B_output_pair, B_feat_pair, B_low_feat_pair = flip(B_output_pair, dim=-1), flip(B_feat_pair, dim=-1), flip(B_low_feat_pair, dim=-1)
+            #B_output_pair, B_feat_pair, B_low_feat_pair = self.model(B_image_pair)
+            #B_output_pair, B_feat_pair, B_low_feat_pair = flip(B_output_pair, dim=-1), flip(B_feat_pair, dim=-1), flip(B_low_feat_pair, dim=-1)
 
             self.optimizer.zero_grad()
             self.D_optimizer.zero_grad()
