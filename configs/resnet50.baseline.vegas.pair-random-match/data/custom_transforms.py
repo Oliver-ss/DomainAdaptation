@@ -55,10 +55,13 @@ class HistogramMatching(object):
         return ans
 
     def __call__(self, sample):
-        img = np.array(sample['image'])
-        reference = np.array(sample['reference'])
-        img = self.match_histogram(img, reference)
-        img = Image.fromarray(img)
+        if np.random.randint(2):
+            img = np.array(sample['image'])
+            reference = np.array(sample['reference'])
+            img = self.match_histogram(img, reference)
+            img = Image.fromarray(img)
+        else:
+            img = sample['image']
         return {'image': img, 'label':sample['label']}
 
 class Remap(object):

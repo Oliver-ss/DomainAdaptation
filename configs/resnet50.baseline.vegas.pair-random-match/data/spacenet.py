@@ -10,8 +10,8 @@ import scipy.misc as m
 import cv2
 from torch.utils import data
 from torchvision import transforms
-import data.custom_transforms as tr
-#import custom_transforms as tr
+#import data.custom_transforms as tr
+import custom_transforms as tr
 import json
 from PIL import Image
 
@@ -46,7 +46,7 @@ class Spacenet(data.Dataset):
                  source_dist={'mean':(0.,0.,0.),'std':(1.,1.,1.,)}, if_pair=False, target='Shanghai', random_match=False):
         self.img_root = img_root
         #self.name_root = '../../dataset/spacenet/domains/' + city
-        self.name_root = '../../dataset/spacenet/domains/' + city
+        self.name_root = '../../../dataset/spacenet/domains/' + city
         with open(os.path.join(self.name_root, split + '.json')) as f:
             self.files = json.load(f)
         self.source_dist = source_dist
@@ -57,10 +57,9 @@ class Spacenet(data.Dataset):
         self.random_match = random_match
         self.target = target
         #self.target_name_root = '../../dataset/spacenet/domains/' + target
-        with open('../../scripts/vegas_inference.json') as f:
+        with open('../../../scripts/vegas_inference.json') as f:
             pair_file = json.load(f)
         self.target_files = pair_file[target]
-
         if not self.files:
             raise Exception("No files for split=[%s] found in %s" % (split, self.images_base))
 
@@ -74,9 +73,9 @@ class Spacenet(data.Dataset):
         img = Image.open(os.path.join(self.img_root, self.files[index] + '_RGB.tif')).convert('RGB')
         label = Image.open(os.path.join(self.img_root, self.files[index] + '_GT.tif'))
         ratio = round(GetRatio(img, label), 1)
-        if ratio in self.target_files.keys():
-            index = int(np.random.rand() * len(self.target_files[ratio]))
-            target_name = self.target_files[index]
+        if len(self.target_files[str(ratio)]) != 0:
+            index = int(np.random.rand() * len(self.target_files[str(ratio)]))
+            target_name = self.target_files[str(ratio)][index]
             reference = Image.open(os.path.join(self.img_root, target_name + '_RGB.tif')).convert('RGB')
         else:
             reference = img.copy()
@@ -112,8 +111,6 @@ class Spacenet(data.Dataset):
                 tr.RandomHorizontalFlip(),
                 tr.RandomScaleCrop(base_size=400, crop_size=400, fill=0),
                 tr.RandomGaussianBlur(),
-                #tr.ConvertFromInts(),
-                #tr.PhotometricDistort(),
                 tr.Normalize(mean=self.source_dist['mean'], std=self.source_dist['std']),
                 tr.ToTensor(),
             ])
@@ -173,24 +170,27 @@ if __name__ == "__main__":
     with open('../../../scripts/color.json') as f:
         color = json.load(f)
     source_dist = mean_std['Vegas']
+    target_dist = mean_std['Shanghai']
     color_dist = color['Shanghai']
     spacenet_train = Spacenet(city='Vegas', split='train', img_root='/data/spacenet/',
-                    source_dist=source_dist, if_pair=False, color_dist=color_dist)
+                    source_dist=source_dist, if_pair=False, target='Shanghai', random_match=True)
     dataloader = DataLoader(spacenet_train, batch_size=1, shuffle=False, num_workers=1)
 
     for ii, sample in enumerate(dataloader):
         for jj in range(sample["image"].size()[0]):
             img = sample['image'][jj].numpy()
-            gt = sample['label'][jj].numpy()
-            gt = gt[:,:,None]
-            gt_ = gt.repeat(3, axis=2)
+            #gt = sample['label'][jj].numpy()
+            #gt = gt[:,:,None]
+            #ref = sample["reference"][jj].numpy()
+            #gt_ = gt.repeat(3, axis=2)
             img = recover_image(img, source_dist)
             img = img.transpose(1,2,0)
-            print(gt.max())
+            #ref = recover_image(ref, target_dist)
+            #ref = ref.transpose(1,2,0)
             #print(img.shape)
-            #cv2.imshow('img', img[:,:,::-1])
-            show = np.hstack((img, gt_))
-            cv2.imshow('show', show[:,:,::-1])
+            cv2.imshow('img', img[:,:,::-1])
+            #show = np.hstack((img, ref))
+            #cv2.imshow('show', show[:,:,::-1])
             c = chr(cv2.waitKey(0) & 0xff)
             if c == 'q':
                 exit()
