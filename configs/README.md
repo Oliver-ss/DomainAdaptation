@@ -1,5 +1,5 @@
 ### README 
-Every diretory represents a trial, now the baseline model is **xh.deeplab.mobilenet.&lt;city name&gt;**, city name means the source domain
+Every diretory represents a trial, now the baseline model is **resnet50.&lt;city name&gt;**, city name means the source domain
 
 
 To train the model, run ```make train```
